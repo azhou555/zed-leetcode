@@ -129,6 +129,8 @@ def main():
     pg = page.read_text()
     assert "## 💡 Solutions" in pg and pg.count("<!-- lc:solutions:start -->") == 1, "solutions block not filled once"
     assert "<!-- lc:result:start -->" in pg, "result block clobbered by solutions update"
+    # two-sum has community solutions + a free editorial: real content must land, not "No solutions available"
+    assert "<details>" in pg and "No solutions available" not in pg, f"solutions empty: {pg[pg.index('## 💡'):][:400]}"
     print("page + solutions: OK")
 
     # sign in creates a private cookie template and opens it

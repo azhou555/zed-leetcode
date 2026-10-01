@@ -67,6 +67,15 @@ fn load_cookie() -> Option<String> {
     (!c.is_empty()).then_some(c)
 }
 
+/// A JSON id that LeetCode may return as either a string or a number.
+fn json_id(v: &Value) -> String {
+    match v {
+        Value::String(s) => s.clone(),
+        Value::Number(n) => n.to_string(),
+        _ => String::new(),
+    }
+}
+
 fn cookie_value(cookie: &str, key: &str) -> Option<String> {
     cookie
         .split(';')
@@ -218,7 +227,7 @@ impl Client {
                         let node = &e["node"];
                         (
                             node["title"].as_str().unwrap_or("").to_string(),
-                            node["topicId"].as_str().unwrap_or("").to_string(),
+                            json_id(&node["topicId"]), // topicId comes back as a number, not a string
                             node["author"]["userName"].as_str().unwrap_or("").to_string(),
                         )
                     })
