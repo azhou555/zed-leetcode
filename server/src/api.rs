@@ -292,8 +292,9 @@ pub fn format_result(r: &Value, submit: bool) -> (bool, String, String) {
         "" => "❌ Unexpected result".to_string(),
         _ => format!("❌ {status}"),
     };
-    if !ok {
-        d.push(format!("Raw: {r}")); // judge shapes vary; never hide what LeetCode said
+    // only when we parsed nothing useful: don't hide an unexpected shape, but don't spam the normal case
+    if d.is_empty() && !ok {
+        d.push(format!("Raw: {r}"));
     }
     (ok, summary, d.join("\n"))
 }
@@ -329,5 +330,17 @@ mod tests {
         let ce = json!({"status_msg":"Compile Error","full_compile_error":"line 3: oops"});
         let (ok, sum, d) = format_result(&ce, false);
         assert!(!ok && sum == "❌ Compile Error" && d.contains("oops"));
+
+        // a real WA (from LeetCode) stays clean: parsed cases, no raw dump
+        let real = json!({"code_answer":["[0,1]","[1,1]","[0,1]",""],"correct_answer":false,
+            "expected_code_answer":["[0,1]","[1,2]","[0,1]",""],"run_success":true,
+            "status_msg":"Accepted","status_runtime":"0 ms","std_output_list":["","","",""]});
+        let (ok, _, d) = format_result(&real, false);
+        assert!(!ok && d.contains("Case 2: ✗") && !d.contains("Raw:"), "{d}");
+
+        // genuinely unexpected shape: nothing parsed, so keep the raw fallback
+        let weird = json!({"state":"SUCCESS","error":"judge exploded"});
+        let (_, sum, d) = format_result(&weird, false);
+        assert!(sum == "❌ Unexpected result" && d.contains("Raw:"), "{d}");
     }
 }
