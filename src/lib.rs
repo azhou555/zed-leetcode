@@ -48,9 +48,11 @@ impl LeetCode {
 
         let (os, _) = zed::current_platform();
         let bin = if matches!(os, Os::Windows) { "leetcode-zed.exe" } else { "leetcode-zed" };
-        let path = format!("leetcode-zed-{}/{bin}", release.version);
+        let dir = format!("leetcode-zed-{}", release.version);
+        let path = format!("{dir}/{bin}");
         if fs::metadata(&path).is_err() {
             zed::set_language_server_installation_status(id, &Status::Downloading);
+            fs::create_dir_all(&dir).map_err(|e| format!("creating {dir}: {e}"))?; // download_file won't make parents
             zed::download_file(&asset.download_url, &path, DownloadedFileType::Gzip)?;
             zed::make_file_executable(&path)?;
         }

@@ -1,6 +1,6 @@
 id = "leetcode"
 name = "LeetCode"
-version = "0.1.0"
+version = "0.1.1"
 schema_version = 1
 authors = ["Alec Zhou <alec1.zhou@gmail.com>"]
 description = "Browse, solve, test and submit LeetCode problems in Zed"
