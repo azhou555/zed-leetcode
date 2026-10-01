@@ -33,7 +33,8 @@ pub fn cookie_path() -> PathBuf {
     let base = env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(env::var_os("HOME").unwrap_or_default()).join(".config"));
-    base.join("leetcode-zed").join("cookie")
+    // `.key`: matched by Zed's default edit_predictions.disabled_globs, so the credential isn't sent for predictions
+    base.join("leetcode-zed").join("cookie.key")
 }
 
 pub const COOKIE_HELP: &str = "\
@@ -260,9 +261,10 @@ pub fn format_result(r: &Value, submit: bool) -> (bool, String, String) {
             }
         }
     } else {
-        let correct = r["correct_answer"].as_bool().unwrap_or(false);
-        ok = r["run_success"].as_bool().unwrap_or(false) && correct;
         let (got, want, out) = (list("code_answer"), list("expected_code_answer"), list("std_output_list"));
+        let same = got.iter().zip(&want).all(|(g, w)| g.is_empty() || g == w) && !got.is_empty();
+        let correct = r["correct_answer"].as_bool().unwrap_or(same);
+        ok = r["run_success"].as_bool().unwrap_or(false) && correct;
         for (i, g) in got.iter().enumerate().filter(|(_, g)| !g.is_empty()) {
             let w = want.get(i).map(String::as_str).unwrap_or("");
             d.push(format!("Case {}: {} output {g}, expected {w}", i + 1, if g == w { "✓" } else { "✗" }));
@@ -278,9 +280,12 @@ pub fn format_result(r: &Value, submit: bool) -> (bool, String, String) {
         _ if ok && submit => "✅ Accepted".to_string(),
         _ if ok => "✅ All test cases passed".to_string(),
         "Accepted" => "❌ Wrong Answer".to_string(), // interpret ran fine but answers differ
-        "" => format!("❌ Unexpected result: {r}"),
+        "" => "❌ Unexpected result".to_string(),
         _ => format!("❌ {status}"),
     };
+    if !ok {
+        d.push(format!("Raw: {r}")); // judge shapes vary; never hide what LeetCode said
+    }
     (ok, summary, d.join("\n"))
 }
 
@@ -308,6 +313,9 @@ mod tests {
             "status_memory":"17 MB","memory_percentile":40.0,"total_correct":63,"total_testcases":63});
         let (ok, sum, d) = format_result(&sub, true);
         assert!(ok && sum == "✅ Accepted" && d.contains("beats 91.5%") && d.contains("63/63"), "{d}");
+
+        let no_flag = json!({"status_msg":"Accepted","run_success":true,"code_answer":["[0,1]"],"expected_code_answer":["[0,1]"]});
+        assert_eq!(format_result(&no_flag, false).1, "✅ All test cases passed");
 
         let ce = json!({"status_msg":"Compile Error","full_compile_error":"line 3: oops"});
         let (ok, sum, d) = format_result(&ce, false);

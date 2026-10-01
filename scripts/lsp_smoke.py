@@ -111,7 +111,7 @@ def main():
     # sign in creates a private cookie template and opens it
     s.inbox.clear()
     s.request("workspace/executeCommand", {"command": "leetcode.signin", "arguments": []})
-    cookie = tmp / "config/leetcode-zed/cookie"
+    cookie = tmp / "config/leetcode-zed/cookie.key"
     assert cookie.exists() and oct(cookie.stat().st_mode & 0o777) == "0o600"
     assert any(m.get("method") == "window/showDocument" for m in s.inbox)
     s.close()

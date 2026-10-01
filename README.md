@@ -41,7 +41,7 @@ Every lens is also a code action (**cmd-.**), so it all works with lenses off to
 
 1. Make an empty folder, create an empty `problems.md` in it, open it in Zed.
    Click **⟳ Load LeetCode problems** (or `leetcode-zed init` in a terminal).
-2. **🔑 Sign in** opens `~/.config/leetcode-zed/cookie`. Paste your browser's
+2. **🔑 Sign in** opens `~/.config/leetcode-zed/cookie.key`. Paste your browser's
    leetcode.com `cookie` header (DevTools → Network → any request), save, then **↻ Refresh**.
    `leetcode-zed login` does the same from a terminal; `$LEETCODE_COOKIE` also works.
 3. Open a problem → a `1.two-sum.py` file with the description, editable testcases
