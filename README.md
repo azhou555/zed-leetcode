@@ -28,25 +28,37 @@ section from LeetCode.
 
 ## Install
 
-1. Build and install the companion binary (CLI + language server):
-   ```sh
-   cargo install --path server      # puts leetcode-zed in ~/.cargo/bin
-   ```
+Once the extension is in Zed's registry, install it from the Extensions panel.
+The companion binary (`leetcode-zed`, the CLI + language server) is **downloaded
+automatically** from this repo's GitHub releases for your platform — no manual
+step. Recommended settings (`zed: open settings`):
+```jsonc
+{
+  "code_lens": "on",
+  "lsp": { "leetcode": { "initialization_options": { "language": "python3" } } }
+}
+```
+Languages: cpp, java, python3, python, c, csharp, javascript, typescript, php,
+swift, kotlin, dart, golang, ruby, scala, rust, racket, erlang, elixir.
+
+### From source (development)
+
+1. `cargo install --path server` (puts `leetcode-zed` on your `$PATH`; the
+   extension uses it directly instead of downloading).
 2. In Zed: `zed: install dev extension` → pick this repo folder.
-3. Recommended settings (`zed: open settings`):
-   ```jsonc
-   {
-     "code_lens": "on",
-     "lsp": {
-       "leetcode": {
-         "initialization_options": { "language": "python3" }
-         // "binary": { "path": "/abs/path/to/leetcode-zed" }  // if it isn't on $PATH
-       }
-     }
-   }
-   ```
-   Languages: cpp, java, python3, python, c, csharp, javascript, typescript, php,
-   swift, kotlin, dart, golang, ruby, scala, rust, racket, erlang, elixir.
+3. The settings above. If the binary isn't on `$PATH`, point to it explicitly:
+   `"lsp": { "leetcode": { "binary": { "path": "/abs/path/to/leetcode-zed", "arguments": ["lsp"] } } }`.
+
+Binary resolution order: `lsp.leetcode.binary.path` → `leetcode-zed` on `$PATH`
+→ GitHub release download.
+
+## Publishing
+
+- **Binaries:** push a tag (`git tag v0.1.0 && git push origin v0.1.0`); the
+  `release` workflow cross-compiles and attaches the per-platform assets that
+  `src/lib.rs` downloads.
+- **Registry:** fork `zed-industries/extensions`, add this repo as a submodule
+  and an entry in its `extensions.toml`, then open a PR.
 
 ## Use
 

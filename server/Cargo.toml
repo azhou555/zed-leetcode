@@ -2,6 +2,10 @@
 name = "leetcode-zed"
 version = "0.1.0"
 edition = "2024"
+description = "LeetCode companion for Zed: CLI + language server"
+authors = ["Alec Zhou <alec1.zhou@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/azhou555/zed-leetcode"
 
 [dependencies]
 crossbeam-channel = "0.5.17"
