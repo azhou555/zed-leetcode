@@ -191,6 +191,52 @@ impl Client {
         })
     }
 
+    /// Official editorial, as Markdown, when it exists and is free to read.
+    pub fn editorial(&self, slug: &str) -> Result<Option<String>> {
+        let d = self.graphql(
+            "query($s:String!){question(titleSlug:$s){solution{paidOnly canSeeDetail content}}}",
+            json!({ "s": slug }),
+        )?;
+        let sol = &d["question"]["solution"];
+        if sol.is_null() || sol["paidOnly"].as_bool().unwrap_or(true) || !sol["canSeeDetail"].as_bool().unwrap_or(false) {
+            return Ok(None);
+        }
+        Ok(sol["content"].as_str().filter(|c| !c.is_empty()).map(String::from))
+    }
+
+    /// Top community solution articles (title, author, topicId), most-voted first.
+    pub fn solutions(&self, slug: &str, n: i64) -> Result<Vec<(String, String, String)>> {
+        let d = self.graphql(
+            "query($q:String!,$n:Int!){ugcArticleSolutionArticles(questionSlug:$q,first:$n,orderBy:MOST_VOTES){edges{node{title topicId author{userName}}}}}",
+            json!({ "q": slug, "n": n }),
+        )?;
+        Ok(d["ugcArticleSolutionArticles"]["edges"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|e| {
+                        let node = &e["node"];
+                        (
+                            node["title"].as_str().unwrap_or("").to_string(),
+                            node["topicId"].as_str().unwrap_or("").to_string(),
+                            node["author"]["userName"].as_str().unwrap_or("").to_string(),
+                        )
+                    })
+                    .filter(|(_, id, _)| !id.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default())
+    }
+
+    /// A community solution article's Markdown body by topicId.
+    pub fn solution_body(&self, topic_id: &str) -> Result<String> {
+        let d = self.graphql(
+            "query($id:ID!){ugcArticleSolutionArticle(topicId:$id){content}}",
+            json!({ "id": topic_id }),
+        )?;
+        Ok(d["ugcArticleSolutionArticle"]["content"].as_str().unwrap_or("").to_string())
+    }
+
     pub fn daily_slug(&self) -> Result<String> {
         let d = self.graphql("query{activeDailyCodingChallengeQuestion{question{titleSlug}}}", json!({}))?;
         d["activeDailyCodingChallengeQuestion"]["question"]["titleSlug"]

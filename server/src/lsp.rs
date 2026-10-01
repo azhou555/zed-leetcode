@@ -22,6 +22,8 @@ const COMMANDS: &[&str] = &[
     "leetcode.daily",
     "leetcode.random",
     "leetcode.signin",
+    "leetcode.page",
+    "leetcode.solutions",
 ];
 
 static NEXT_ID: AtomicI32 = AtomicI32::new(1);
@@ -136,7 +138,13 @@ fn actions(st: &State, uri: &Url, text: &str, line: Option<u32>) -> Vec<(u32, St
             v.push((e.line, title, "leetcode.open", vec![u.clone(), json!(e.slug)]));
         }
     } else if let Some(s) = files::parse_solution(text, &file_name(uri)) {
-        for (t, c) in [("▶ Test", "leetcode.test"), ("⬆ Submit", "leetcode.submit"), ("🌐 Open in browser", "leetcode.browser")] {
+        for (t, c) in [
+            ("▶ Test", "leetcode.test"),
+            ("⬆ Submit", "leetcode.submit"),
+            ("📄 Problem page", "leetcode.page"),
+            ("💡 Solutions", "leetcode.solutions"),
+            ("🌐 Open in browser", "leetcode.browser"),
+        ] {
             v.push((s.lens_line, t.into(), c, vec![u.clone()]));
         }
     }
@@ -274,13 +282,42 @@ fn execute(
             let done = progress(out, &format!("Opening {slug}"));
             let r = crate::open(&dir, &slug, lang);
             done();
-            show(&r?);
+            let (code, _page) = r?;
+            show(&code);
         }
         "leetcode.daily" => {
             let done = progress(out, "Opening daily problem");
             let r = api::Client::new().daily_slug().and_then(|s| crate::open(&dir, &s, lang));
             done();
+            let (code, _page) = r?;
+            show(&code);
+        }
+        "leetcode.page" => {
+            let uri = uri.ok_or("missing file")?;
+            let s = files::parse_solution(&text, &file_name(&uri)).ok_or("not a solution file")?;
+            let page = dir.join(crate::page::page_filename(&s.id, &s.slug));
+            if !page.exists() {
+                let done = progress(out, "Building problem page");
+                let r = crate::open(&dir, &s.slug, lang);
+                done();
+                r?;
+            }
+            show(&page);
+            message(out, MessageType::INFO, "LeetCode: run `markdown: open preview to the side` to view the page rendered — it updates as you Test/Submit.");
+        }
+        "leetcode.solutions" => {
+            let uri = uri.ok_or("missing file")?;
+            let s = files::parse_solution(&text, &file_name(&uri)).ok_or("not a solution file")?;
+            let done = progress(out, "Loading solutions");
+            let r = (|| {
+                if !dir.join(crate::page::page_filename(&s.id, &s.slug)).exists() {
+                    crate::open(&dir, &s.slug, lang)?;
+                }
+                crate::load_solutions(&dir, &s.id, &s.slug)
+            })();
+            done();
             show(&r?);
+            message(out, MessageType::INFO, "LeetCode: solutions added to the problem page (open its preview to read them).");
         }
         "leetcode.random" => {
             let text = fs::read_to_string(dir.join(files::LIST_FILE)).unwrap_or(text);
@@ -334,6 +371,8 @@ fn execute(
                 let range = Range::new(Position::new(s.lens_line, 0), Position::new(s.lens_line, 200));
                 let d = Diagnostic::new(range, Some(sev), None, Some("leetcode".into()), format!("{summary}\n{details}"), None, None);
                 publish(out, &uri, vec![d]);
+                // stream the verdict into the problem page's preview, if one exists
+                crate::write_page_result(&dir.join(crate::page::page_filename(&s.id, &s.slug)), &summary, &details, submit);
             }
             message(out, if ok { MessageType::INFO } else { MessageType::ERROR }, &format!("{summary}\n{details}"));
         }

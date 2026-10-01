@@ -2,9 +2,10 @@ mod api;
 mod browsers;
 mod files;
 mod lsp;
+mod page;
 
 use api::{Client, Result};
-use std::{env, fs, path::{Path, PathBuf}, process::ExitCode};
+use std::{env, fs, path::{Path, PathBuf}, process::ExitCode, time::{SystemTime, UNIX_EPOCH}};
 
 /// Import the session from a browser (or just `only`), save it, and confirm against LeetCode.
 pub fn sign_in_from_browser(only: Option<&str>) -> Result<String> {
@@ -28,14 +29,56 @@ pub fn refresh(dir: &Path) -> Result<String> {
     Ok(format!("{} problems{}", problems.len(), if user.is_empty() { " (not signed in)".into() } else { format!(", signed in as {user}") }))
 }
 
-/// Solution file for `slug` in `dir`, created from the LeetCode template if missing.
-pub fn open(dir: &Path, slug: &str, lang: &str) -> Result<PathBuf> {
+/// Open a problem: ensure both the solution file and the Markdown page exist in `dir`.
+/// Returns (code file, page file). Neither is overwritten if it already exists (keeps your work / last result).
+pub fn open(dir: &Path, slug: &str, lang: &str) -> Result<(PathBuf, PathBuf)> {
     let q = Client::new().question(slug)?;
-    if let Some(p) = files::find_solution(dir, &q.id, &q.slug) {
-        return Ok(p);
+    let page = dir.join(page::page_filename(&q.id, &q.slug));
+    if !page.exists() {
+        fs::write(&page, page::render(&q)).map_err(|e| e.to_string())?;
     }
-    let path = dir.join(files::solution_filename(&q.id, &q.slug, lang).ok_or(format!("unknown language {lang}"))?);
-    fs::write(&path, files::render_solution(&q, lang)?).map_err(|e| e.to_string())?;
+    let code = match files::find_solution(dir, &q.id, &q.slug) {
+        Some(p) => p,
+        None => {
+            let p = dir.join(files::solution_filename(&q.id, &q.slug, lang).ok_or(format!("unknown language {lang}"))?);
+            fs::write(&p, files::render_solution(&q, lang)?).map_err(|e| e.to_string())?;
+            p
+        }
+    };
+    Ok((code, page))
+}
+
+/// UTC HH:MM:SS, so a re-run visibly changes the page even with the same verdict.
+// ponytail: UTC not local; avoids pulling in chrono/tz just for a freshness stamp.
+fn now_hms() -> String {
+    let s = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    format!("{:02}:{:02}:{:02} UTC", (s / 3600) % 24, (s / 60) % 60, s % 60)
+}
+
+/// Rewrite the page's result block in place. No-op if the page/markers are absent.
+pub fn write_page_result(page: &Path, summary: &str, details: &str, submit: bool) {
+    if let Ok(text) = fs::read_to_string(page) {
+        let md = page::result_markdown(summary, details, submit, &now_hms());
+        let _ = fs::write(page, page::set_block(&text, "result", &md));
+    }
+}
+
+/// Fetch editorial + top community solutions into the page's solutions block. Page must exist.
+pub fn load_solutions(dir: &Path, id: &str, slug: &str) -> Result<PathBuf> {
+    let c = Client::new();
+    let editorial = c.editorial(slug).unwrap_or(None);
+    let articles: Vec<(String, String)> = c
+        .solutions(slug, 3)?
+        .into_iter()
+        .filter_map(|(title, topic, author)| {
+            let body = c.solution_body(&topic).ok().filter(|b| !b.is_empty())?;
+            Some((if author.is_empty() { title } else { format!("{title} — {author}") }, body))
+        })
+        .collect();
+    let path = dir.join(page::page_filename(id, slug));
+    let text = fs::read_to_string(&path).map_err(|_| "open the problem first (no page file)".to_string())?;
+    let md = page::solutions_markdown(editorial.as_deref(), &articles);
+    fs::write(&path, page::set_block(&text, "solutions", &md)).map_err(|e| e.to_string())?;
     Ok(path)
 }
 
@@ -119,8 +162,8 @@ fn main() -> ExitCode {
                 .collect::<Vec<_>>()
                 .join("\n")
         }),
-        Some("pick") if !arg.is_empty() => slug_for(&arg).and_then(|s| open(&cwd, &s, &lang)).map(|p| p.display().to_string()),
-        Some("daily") => Client::new().daily_slug().and_then(|s| open(&cwd, &s, &lang)).map(|p| p.display().to_string()),
+        Some("pick") if !arg.is_empty() => slug_for(&arg).and_then(|s| open(&cwd, &s, &lang)).map(|(code, _)| code.display().to_string()),
+        Some("daily") => Client::new().daily_slug().and_then(|s| open(&cwd, &s, &lang)).map(|(code, _)| code.display().to_string()),
         Some(cmd @ ("test" | "submit")) if !arg.is_empty() => {
             let path = PathBuf::from(&arg);
             let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();

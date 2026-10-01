@@ -40,11 +40,12 @@ pub fn solution_filename(id: &str, slug: &str, lang: &str) -> Option<String> {
     lang_info(lang).map(|(ext, _)| format!("{id}.{slug}.{ext}"))
 }
 
-/// Existing solution file for a problem in `dir`, any language.
+/// Existing solution file for a problem in `dir`, any language. Ignores the `.md` page.
 pub fn find_solution(dir: &Path, id: &str, slug: &str) -> Option<std::path::PathBuf> {
     let prefix = format!("{id}.{slug}.");
     std::fs::read_dir(dir).ok()?.flatten().map(|e| e.path()).find(|p| {
-        p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with(&prefix))
+        let ext_is_code = p.extension().and_then(|e| e.to_str()).is_some_and(|e| LANGS.iter().any(|l| l.1 == e));
+        ext_is_code && p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with(&prefix))
     })
 }
 
@@ -210,6 +211,17 @@ mod tests {
         assert_eq!(text.lines().nth(s.lens_line as usize), Some("# @lc code=start"));
         assert!(render_solution(&q(), "rust").is_err());
         assert!(render_solution(&q(), "cobol").is_err());
+    }
+
+    #[test]
+    fn find_solution_ignores_page() {
+        let d = std::env::temp_dir().join(format!("lc-find-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("1.two-sum.md"), "page").unwrap();
+        assert!(find_solution(&d, "1", "two-sum").is_none(), "should skip the .md page");
+        std::fs::write(d.join("1.two-sum.py"), "code").unwrap();
+        assert!(find_solution(&d, "1", "two-sum").unwrap().extension().unwrap() == "py");
+        std::fs::remove_dir_all(&d).ok();
     }
 
     #[test]

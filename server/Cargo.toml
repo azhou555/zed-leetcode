@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 crossbeam-channel = "0.5.17"
+htmd = "0.5.5"
 html2text = "0.17.1"
 lsp-server = "0.7"
 lsp-types = "0.95"

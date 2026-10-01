@@ -1,62 +1,49 @@
-# zed-leetcode plan
+# Markdown "page" feature
 
-Zed extensions can't add panels/webviews. What they *can* do: launch a language
-server. Zed 1.22 renders LSP code lenses (clickable, `"code_lens": "on"`), code
-actions (cmd-.), `workspace/symbol` (cmd-T), `window/showDocument`,
-`window/showMessage` (prompt toast), `$/progress` (status bar) and diagnostics.
-So the "UI" is: a generated `problems.md` browsed via outline/cmd-T + lenses, and
-solution files with Test/Submit lenses.
+Make a per-problem Markdown page that renders in Zed's preview and resembles the
+LeetCode page as far as the theme allows (no custom CSS possible). Live-updates
+with Test/Submit results; can also load solutions.
 
-## Architecture
-```
-extension.toml, Cargo.toml, src/lib.rs   WASM extension: starts `leetcode-zed lsp`
-                                         (binary from settings path or $PATH) on
-                                         all LeetCode languages + Markdown
-server/  (bin `leetcode-zed`)            native CLI + LSP, one core
-  api.rs    LeetCode HTTP (list, question, daily, interpret/submit + poll, whoami)
-  files.rs  solution file format (vscode-leetcode compatible @lc markers), problems.md
-  lsp.rs    lenses/actions/symbols/executeCommand
-  main.rs   CLI: init | login | list | pick | test | submit | daily | whoami | lsp
-```
+## Confirmed feasible (checked against Zed source + LeetCode API)
+- Zed markdown preview renders remote images (assets.leetcode.com) and reparses on change.
+- Preview has a pinned "Default" mode (`markdown: open preview to the side`) that stays on one
+  file while you work in the code file — so results can stream into it.
+- Community solutions: `ugcArticleSolutionArticles` (list) + `ugcArticleSolutionArticle(topicId)`
+  returns Markdown `content`. Editorial: `question.solution{paidOnly canSeeDetail}` — free for many.
+- html -> markdown via `htmd` crate (keeps images, tables, code).
 
-## Solution file format (compatible with vscode-leetcode)
-```
-# @lc app=leetcode id=1 lang=python3 slug=two-sum
-# [1] Two Sum (Easy)  <description as comments>
-# @lc tests=start   <- editable custom testcases, defaults to examples
-# @lc tests=end
-# @lc code=start
-...only this region is submitted...
-# @lc code=end
-```
+## Design
+- `open()` writes both the code file AND `<id>.<slug>.md` (the page).
+- Page layout (with rewrite markers so Test/Submit touch only the result block):
+  ```
+  # [1] Two Sum   🟢 Easy
+  [Open on LeetCode](url)   `two-sum`
+  <!-- lc:result:start -->  (initially: "Run ▶ Test…")  <!-- lc:result:end -->
+  ---
+  <description: html->md, with images/tables/examples/constraints>
+  <!-- lc:solutions:start --> (empty until loaded) <!-- lc:solutions:end -->
+  ```
+- Code file lenses gain **📄 Problem page** (opens the .md) and **💡 Solutions** (loads into page).
+- Test/Submit: after judging, rewrite the page's result block with the verdict (same text as the
+  popup, formatted as markdown), find the sibling page by `<id>.<slug>.md`. Keep the diagnostic too.
+- Update mechanism: rewrite the file on disk; Zed reloads the unmodified buffer -> preview refreshes.
+  If that proves flaky in-app, switch to `workspace/applyEdit`. (Can't verify preview headlessly.)
+- `leetcode.page` and `leetcode.solutions` commands; advertise them.
 
-## Features
-- [x] problems.md: one `## 1. Two Sum · Easy · ✅` heading per problem (outline/cmd-T searchable)
-- [x] Lens on headings: Open (fetch, write solution file, showDocument)
-- [x] Lens at top of problems.md: Refresh · Daily · Random · Sign in
-- [x] workspace/symbol: fuzzy problem search from any file
-- [x] Solution file lenses: ▶ Test · ⬆ Submit · 🌐 Open in browser
-- [x] Results: progress in status bar, prompt with verdict, diagnostic on code=start line
-- [x] Auth: cookie file (~/.config/leetcode-zed/cookie) opened from "Sign in" lens / `login` CLI / env
-- [x] Settings via `lsp.leetcode.initialization_options` (language, site)
-- [x] CLI + `init` writes .zed/tasks.json (Test/Submit in terminal via $ZED_FILE)
-- [x] Non-LeetCode files/projects: server stays silent
-- [ ] Stretch: leetcode.cn base url, topic tags (skipped)
-
-## Verification
-- unit tests: header/tests/code parsing, filename, problems.md render
-- live: list + question fetch + pick against leetcode.com (no auth)
-- LSP smoke test: scripted JSON-RPC client (initialize, codeLens, symbol, executeCommand open)
-- wasm build: `cargo build --target wasm32-wasip2`
-- test/submit need a real cookie: verify request shape, ask user to confirm live
+## Steps
+- [x] add `htmd`; `page.rs`: render_page(question), update_result(page, md), load_solutions
+- [x] api.rs: `solutions(slug, n)` + `solution_body(topicId)` + editorial
+- [x] open(): write page beside code
+- [x] lsp: page/solutions commands + lenses; judge() updates page result block
+- [x] unit tests: page render has markers+image, result-block replace is idempotent, solution md
+- [x] smoke test: open writes .md; page/solutions commands; test updates result block
+- [x] README + manual verify in Zed (preview refresh is the one thing to confirm live)
 
 ## Review
-- unit tests (5) pass; clippy clean for server and wasm extension
-- live: `init` (4069 problems + daily), `pick 1`, `pick lru-cache --lang rust`, `list two sum` against leetcode.com
-- scripts/lsp_smoke.py passes: bootstrap lens on empty problems.md -> refresh, 4074 lenses, heading code action ->
-  open writes file + showDocument + $/progress, cmd-t resolves to existing solution, solution lenses on code=start,
-  Test without cookie -> "not signed in" prompt, sign-in creates 0600 cookie template, unrelated project is silent
-- Zed source checked: commands must be advertised (they are), showDocument/showMessage/progress/code lens supported,
-  default language_servers keep "..." so the server attaches
-- NOT verified: real judge round-trip (needs the user's cookie) and in-Zed rendering (isolated Zed instance
-  refuses to start while the user's Zed runs)
+- 11 unit tests pass (page markers+image, set_block idempotent/scoped, find_solution ignores .md,
+  solutions md); clippy clean; LSP smoke test passes incl. page creation + live solutions block rewrite
+- live CLI: page generated for two-sum (markers, description) and add-two-numbers (image converted to
+  ![](assets.leetcode.com/...)); both code + page files created; fixed find_solution picking up the .md
+- NOT verified (needs live Zed + the preview open): that rewriting the .md on disk refreshes an open
+  Markdown preview, and the real judge->page result update. If preview doesn't auto-refresh, switch the
+  page writes to workspace/applyEdit.

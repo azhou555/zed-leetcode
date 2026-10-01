@@ -98,16 +98,36 @@ def main():
     assert syms and syms[0]["location"]["uri"] == sol.as_uri(), syms[:2]
     assert any(x["location"]["uri"].endswith("problems.md") for x in syms)
 
+    # opening a problem also wrote the Markdown page with both rewrite blocks
+    page = ws / "1.two-sum.md"
+    assert page.exists(), "problem page not created"
+    pg = page.read_text()
+    assert pg.startswith("# [1] Two Sum") and "<!-- lc:result:start -->" in pg and "<!-- lc:solutions:start -->" in pg
+
     # solution file lenses on the code=start line; Test without cookie reports sign-in
     s.open(sol)
     ls = lenses(s, sol)
     start = sol.read_text().splitlines().index("# @lc code=start")
-    assert [l["command"]["command"] for l in ls] == ["leetcode.test", "leetcode.submit", "leetcode.browser"]
+    assert [l["command"]["command"] for l in ls] == \
+        ["leetcode.test", "leetcode.submit", "leetcode.page", "leetcode.solutions", "leetcode.browser"]
     assert all(l["range"]["start"]["line"] == start for l in ls)
     s.inbox.clear()
     s.request("workspace/executeCommand", ls[0]["command"])
     msgs = [m["params"]["message"] for m in s.inbox if m.get("method") == "window/showMessage"]
     assert any("not signed in" in m for m in msgs), s.inbox
+
+    # Problem page lens opens the .md
+    s.inbox.clear()
+    s.request("workspace/executeCommand", {"command": "leetcode.page", "arguments": [sol.as_uri()]})
+    assert any(m.get("method") == "window/showDocument" and m["params"]["uri"] == page.as_uri() for m in s.inbox)
+
+    # Solutions lens fills the solutions block in place (network, no auth) and reopens the page
+    s.inbox.clear()
+    s.request("workspace/executeCommand", {"command": "leetcode.solutions", "arguments": [sol.as_uri()]})
+    pg = page.read_text()
+    assert "## 💡 Solutions" in pg and pg.count("<!-- lc:solutions:start -->") == 1, "solutions block not filled once"
+    assert "<!-- lc:result:start -->" in pg, "result block clobbered by solutions update"
+    print("page + solutions: OK")
 
     # sign in creates a private cookie template and opens it
     s.inbox.clear()

@@ -10,10 +10,21 @@ from a language server:
 |---|---|
 | `problems.md` | every problem as a heading (`## 1. Two Sum · Easy · ✅`), daily problem on top. Search with **cmd-shift-o** (outline). Each heading has a **▶ Open** lens; top line has **↻ Refresh · 📅 Daily · 🎲 Random · 🔑 Sign in** |
 | anywhere in the workspace | **cmd-t** searches problems; picks an existing solution file or the heading in `problems.md` |
-| solution files | **▶ Test · ⬆ Submit · 🌐 Open in browser** above `@lc code=start` |
-| results | status-bar progress, a popup with the verdict / failing case, and a diagnostic on the code block |
+| solution files | **▶ Test · ⬆ Submit · 📄 Problem page · 💡 Solutions · 🌐 Open in browser** above `@lc code=start` |
+| results | status-bar progress, a popup with the verdict / failing case, a diagnostic on the code block, **and a live section in the problem page** |
+| problem page (`<id>.<slug>.md`) | the description with images/examples/constraints, rendered in Zed's Markdown preview; the result section updates on each Test/Submit, and **💡 Solutions** adds the editorial (when free) + top community solutions |
 
 Every lens is also a code action (**cmd-.**), so it all works with lenses off too.
+
+### The problem page
+
+Opening a problem writes two files: the solution (`1.two-sum.py`) and a Markdown
+page (`1.two-sum.md`). Open the page and run **`markdown: open preview to the side`**
+once — it renders like a cleaned-up version of the LeetCode page (styled by your Zed
+theme; custom CSS isn't possible for extensions). When you **Test**/**Submit** from the
+solution file, the page's result section rewrites itself, so the preview shows the
+latest verdict without you switching files. **💡 Solutions** fills the page's solutions
+section from LeetCode.
 
 ## Install
 
