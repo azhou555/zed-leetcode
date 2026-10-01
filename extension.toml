@@ -1,0 +1,10 @@
+id = "leetcode"
+name = "LeetCode"
+version = "0.1.0"
+schema_version = 1
+authors = ["azhou <xj.zhou@gmail.com>"]
+description = "Browse, solve, test and submit LeetCode problems in Zed"
+
+[language_servers.leetcode]
+name = "LeetCode"
+languages = ["Markdown", "Python", "Rust", "C", "C++", "Java", "JavaScript", "TypeScript", "Go", "Ruby", "PHP", "Kotlin", "Swift", "Scala", "Dart", "CSharp", "Elixir", "Erlang", "Racket"]
