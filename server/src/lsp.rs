@@ -298,14 +298,25 @@ fn execute(
             show_document_at(out, Url::from_file_path(dir.join(files::LIST_FILE)).unwrap(), Range::new(pos, pos));
         }
         "leetcode.signin" => {
-            let p = api::cookie_path();
-            if !p.exists() {
-                fs::create_dir_all(p.parent().unwrap()).map_err(|e| e.to_string())?;
-                fs::write(&p, api::COOKIE_HELP).map_err(|e| e.to_string())?;
-                crate::restrict(&p)?;
+            let done = progress(out, "Importing LeetCode session from your browser");
+            let imported = crate::sign_in_from_browser(None);
+            done();
+            match imported {
+                Ok(msg) => {
+                    message(out, MessageType::INFO, &format!("LeetCode: {msg}. ↻ Refresh problems.md to see your progress."));
+                    let _ = crate::refresh(&dir); // reflect solved status right away
+                    show(&dir.join(files::LIST_FILE));
+                }
+                Err(e) => {
+                    // no browser session found: fall back to pasting a cookie into a file
+                    let p = api::cookie_path();
+                    if !p.exists() {
+                        api::save_cookie("").ok();
+                    }
+                    show(&p);
+                    message(out, MessageType::WARNING, &format!("LeetCode: {e}\nOr paste your cookie into this file, save, then ↻ Refresh."));
+                }
             }
-            show(&p);
-            message(out, MessageType::INFO, "LeetCode: paste your cookie into this file, save, then ↻ Refresh problems.md.");
         }
         "leetcode.browser" => {
             let s = files::parse_solution(&text, &file_name(uri.as_ref().unwrap())).ok_or("not a solution file")?;

@@ -57,7 +57,8 @@ def main():
     tmp = pathlib.Path(tempfile.mkdtemp())
     ws, other = tmp / "ws", tmp / "other"
     ws.mkdir(), other.mkdir()
-    env = {**os.environ, "XDG_CONFIG_HOME": str(tmp / "config")}  # never touch the real cookie
+    env = {**os.environ, "XDG_CONFIG_HOME": str(tmp / "config"),  # never touch the real cookie
+           "LEETCODE_NO_BROWSER": "1"}  # don't read the host's real browser; test the paste fallback
     env.pop("LEETCODE_COOKIE", None)
     (ws / "problems.md").write_text("")
 

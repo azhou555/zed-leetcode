@@ -1,9 +1,22 @@
 mod api;
+mod browsers;
 mod files;
 mod lsp;
 
 use api::{Client, Result};
 use std::{env, fs, path::{Path, PathBuf}, process::ExitCode};
+
+/// Import the session from a browser (or just `only`), save it, and confirm against LeetCode.
+pub fn sign_in_from_browser(only: Option<&str>) -> Result<String> {
+    let (browser, header) = browsers::import(only)?;
+    api::save_cookie(&header)?;
+    let (user, _) = Client::new().problems()?;
+    if user.is_empty() {
+        Err(format!("imported a session from {browser}, but LeetCode rejected it — log in again in your browser, then retry"))
+    } else {
+        Ok(format!("signed in as {user} (imported from {browser})"))
+    }
+}
 
 /// Write problems.md in `dir`. Returns a short summary.
 pub fn refresh(dir: &Path) -> Result<String> {
@@ -50,7 +63,8 @@ const TASKS: &str = r#"[
 const USAGE: &str = "leetcode-zed: LeetCode for Zed
 
   init                 write problems.md (and .zed/tasks.json if absent) in the current dir
-  login                read your LeetCode cookie from stdin and save it
+  login [browser]      import the LeetCode session from Firefox/Chrome (or a named one)
+  login paste          read a cookie header from stdin instead
   whoami               show the signed-in user
   list [words...]      search problems
   pick <slug|id>       create the solution file in the current dir, print its path
@@ -81,18 +95,18 @@ fn main() -> ExitCode {
             }
             format!("wrote {} ({s})", files::LIST_FILE)
         }),
-        Some("login") => {
-            let mut cookie = String::new();
-            eprintln!("Paste your leetcode.com cookie header, then Enter:");
-            let _ = std::io::stdin().read_line(&mut cookie);
-            let p = api::cookie_path();
-            fs::create_dir_all(p.parent().unwrap())
-                .and_then(|_| fs::write(&p, format!("{}{}\n", api::COOKIE_HELP, cookie.trim())))
-                .map_err(|e| e.to_string())
-                .and_then(|_| restrict(&p))
-                .and_then(|_| Client::new().problems())
-                .map(|(u, _)| if u.is_empty() { "saved, but LeetCode doesn't recognize it (expired or incomplete?)".into() } else { format!("signed in as {u}") })
-        }
+        Some("login") => match arg.as_str() {
+            "paste" => {
+                let mut cookie = String::new();
+                eprintln!("Paste your leetcode.com cookie header, then Enter:");
+                let _ = std::io::stdin().read_line(&mut cookie);
+                api::save_cookie(cookie.trim())
+                    .and_then(|_| Client::new().problems())
+                    .map(|(u, _)| if u.is_empty() { "saved, but LeetCode doesn't recognize it (expired or incomplete?)".into() } else { format!("signed in as {u}") })
+            }
+            "" => sign_in_from_browser(None),
+            browser => sign_in_from_browser(Some(browser)),
+        },
         Some("whoami") => Client::new().problems().map(|(u, _)| if u.is_empty() { "not signed in".into() } else { u }),
         Some("list") => Client::new().problems().map(|(_, ps)| {
             let words: Vec<String> = args[1..].iter().map(|w| w.to_lowercase()).collect();

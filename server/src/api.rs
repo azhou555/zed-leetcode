@@ -43,7 +43,16 @@ pub const COOKIE_HELP: &str = "\
 # reload, click any request to leetcode.com, and copy the full `cookie` request
 # header value. It must contain LEETCODE_SESSION=... and csrftoken=...
 # Lines starting with # are ignored. Alternatively set $LEETCODE_COOKIE.
+# Or run `leetcode-zed login` to import it from Firefox/Chrome automatically.
 ";
+
+/// Write a cookie header to the cookie file (owner-only), preserving the help comment.
+pub fn save_cookie(header: &str) -> Result<()> {
+    let p = cookie_path();
+    fs::create_dir_all(p.parent().unwrap()).map_err(|e| e.to_string())?;
+    fs::write(&p, format!("{COOKIE_HELP}{}\n", header.trim())).map_err(|e| e.to_string())?;
+    crate::restrict(&p)
+}
 
 /// Cookie from $LEETCODE_COOKIE or the cookie file (comment lines ignored).
 fn load_cookie() -> Option<String> {

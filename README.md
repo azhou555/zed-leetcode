@@ -41,9 +41,15 @@ Every lens is also a code action (**cmd-.**), so it all works with lenses off to
 
 1. Make an empty folder, create an empty `problems.md` in it, open it in Zed.
    Click **⟳ Load LeetCode problems** (or `leetcode-zed init` in a terminal).
-2. **🔑 Sign in** opens `~/.config/leetcode-zed/cookie.key`. Paste your browser's
-   leetcode.com `cookie` header (DevTools → Network → any request), save, then **↻ Refresh**.
-   `leetcode-zed login` does the same from a terminal; `$LEETCODE_COOKIE` also works.
+2. **🔑 Sign in** imports your LeetCode session straight from **Firefox** or **Chrome**
+   (just be logged into leetcode.com in one of them). Firefox needs no prompt; Chrome asks
+   once for Keychain access to "Chrome Safe Storage" to decrypt its cookies. Only
+   `LEETCODE_SESSION` and `csrftoken` are read, and they're saved to
+   `~/.config/leetcode-zed/cookie.key` (readable only by you).
+   - From a terminal: `leetcode-zed login` (or `login firefox` / `login chrome`).
+   - No browser access? `leetcode-zed login paste` reads a cookie header from stdin, the
+     **Sign in** lens falls back to opening `cookie.key` for you to paste into, and
+     `$LEETCODE_COOKIE` is honored. Set `$LEETCODE_NO_BROWSER=1` to disable browser reading.
 3. Open a problem → a `1.two-sum.py` file with the description, editable testcases
    between `@lc tests=start/end`, and the template between `@lc code=start/end`.
    Only the code region is sent. Files are compatible with vscode-leetcode.
@@ -51,7 +57,7 @@ Every lens is also a code action (**cmd-.**), so it all works with lenses off to
 ## CLI and Zed tasks
 
 ```
-leetcode-zed init | login | whoami | list [words] | pick <slug|id> | daily | test <file> | submit <file>
+leetcode-zed init | login [browser|paste] | whoami | list [words] | pick <slug|id> | daily | test <file> | submit <file>
 ```
 `init` also writes `.zed/tasks.json` with **LeetCode: Test / Submit** tasks, so you
 can get the judge output in the terminal (`task: spawn`), or bind them to keys:
