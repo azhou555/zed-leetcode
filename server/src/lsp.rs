@@ -282,15 +282,15 @@ fn execute(
             let done = progress(out, &format!("Opening {slug}"));
             let r = crate::open(&dir, &slug, lang);
             done();
-            let (code, _page) = r?;
-            show(&code);
+            let (code, page) = r?;
+            open_problem(out, &code, &page);
         }
         "leetcode.daily" => {
             let done = progress(out, "Opening daily problem");
             let r = api::Client::new().daily_slug().and_then(|s| crate::open(&dir, &s, lang));
             done();
-            let (code, _page) = r?;
-            show(&code);
+            let (code, page) = r?;
+            open_problem(out, &code, &page);
         }
         "leetcode.page" => {
             let uri = uri.ok_or("missing file")?;
@@ -303,7 +303,7 @@ fn execute(
                 r?;
             }
             show(&page);
-            message(out, MessageType::INFO, "LeetCode: run `markdown: open preview to the side` to view the page rendered — it updates as you Test/Submit.");
+            message(out, MessageType::INFO, "LeetCode: with this .md focused, press cmd-k then v (preview to the side) or cmd-shift-v. It updates as you Test/Submit.");
         }
         "leetcode.solutions" => {
             let uri = uri.ok_or("missing file")?;
@@ -400,6 +400,14 @@ fn publish(out: &Sender<Message>, uri: &Url, diagnostics: Vec<Diagnostic>) {
 
 fn show_document(out: &Sender<Message>, uri: Url, external: bool) {
     send_request(out, "window/showDocument", json!({ "uri": uri, "external": external, "takeFocus": true }));
+}
+
+/// Open the problem page as a background tab, then focus the solution file.
+/// (Zed can't open the Markdown *preview* from here — that's cmd-shift-m.)
+fn open_problem(out: &Sender<Message>, code: &std::path::Path, page: &std::path::Path) {
+    send_request(out, "window/showDocument", json!({ "uri": Url::from_file_path(page).unwrap(), "takeFocus": false }));
+    show_document(out, Url::from_file_path(code).unwrap(), false);
+    message(out, MessageType::INFO, "LeetCode: problem page opened in a tab — focus it and press cmd-shift-m to preview it beside your code.");
 }
 
 fn show_document_at(out: &Sender<Message>, uri: Url, selection: Range) {

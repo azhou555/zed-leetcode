@@ -89,8 +89,10 @@ def main():
     s.request("workspace/executeCommand", open_act)
     sol = ws / "1.two-sum.py"
     assert sol.exists()
-    shown = [m for m in s.inbox if m.get("method") == "window/showDocument"]
-    assert shown and shown[0]["params"]["uri"] == sol.as_uri(), s.inbox
+    # Open shows the page (unfocused) and the solution file (focused)
+    shown = {m["params"]["uri"]: m["params"].get("takeFocus") for m in s.inbox if m.get("method") == "window/showDocument"}
+    assert shown.get((ws / "1.two-sum.md").as_uri()) is False, shown
+    assert shown.get(sol.as_uri()) is True, shown
     assert any(m.get("method") == "$/progress" for m in s.inbox)
 
     # symbols: search, existing solution resolves to the file

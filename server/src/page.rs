@@ -39,9 +39,29 @@ pub fn set_block(page: &str, name: &str, inner: &str) -> String {
     format!("{}{}", &page[..start], block(name, inner)) + &page[end + b.len()..]
 }
 
+/// Fix up LeetCode's HTML before htmd:
+/// - htmd turns `<code>` *inside* a `<pre>` into a fenced code block, which shreds
+///   the example blocks (`<pre>` wrapping `<strong>`/`<code>`/text) — make those inline.
+/// - `<sup>5</sup>` would flatten to `105`; turn it into `^5` so `10^5` stays meaningful.
+fn clean_html(html: &str) -> String {
+    let mut out = String::with_capacity(html.len());
+    let mut rest = html;
+    while let Some(i) = rest.find("<pre") {
+        out.push_str(&rest[..i]);
+        rest = &rest[i..];
+        let Some(end) = rest.find("</pre>") else { break };
+        let block = &rest[..end + "</pre>".len()];
+        // ponytail: LeetCode's in-example <code> has no attributes; plain-tag strip is enough.
+        out.push_str(&block.replace("<code>", "`").replace("</code>", "`"));
+        rest = &rest[end + "</pre>".len()..];
+    }
+    out.push_str(rest);
+    out.replace("<sup>", "^").replace("</sup>", "")
+}
+
 pub fn render(q: &Question) -> String {
     let desc = match &q.content {
-        Some(html) => htmd::convert(html).unwrap_or_else(|_| html.clone()),
+        Some(html) => htmd::convert(&clean_html(html)).unwrap_or_else(|_| html.clone()),
         None => "_Premium problem: description unavailable._".into(),
     };
     format!(
@@ -96,7 +116,11 @@ mod tests {
             title: "Two Sum".into(),
             slug: "two-sum".into(),
             difficulty: "Easy".into(),
-            content: Some("<p>Given <code>nums</code>.</p><img src=\"https://assets.leetcode.com/x.png\" />".into()),
+            content: Some(concat!(
+                "<p>Given <code>nums</code> where <code>n <= 10<sup>5</sup></code>.</p>",
+                "<img src=\"https://assets.leetcode.com/x.png\" />",
+                "<pre><strong>Input:</strong> s = \"abc\"\nNote that <code>&quot;bca&quot;</code> works.</pre>",
+            ).into()),
             snippets: vec![],
             examples: "[2,7]\n9".into(),
         }
@@ -111,6 +135,16 @@ mod tests {
         for m in ["result", "solutions"] {
             assert!(p.contains(&format!("<!-- lc:{m}:start -->")) && p.contains(&format!("<!-- lc:{m}:end -->")));
         }
+    }
+
+    #[test]
+    fn example_pre_blocks_stay_prose() {
+        let p = render(&q());
+        // the <pre> example must not become a fenced code block, and <strong>/<code> keep working
+        assert!(!p.contains("```"), "example turned into a code fence: {p}");
+        assert!(p.contains("**Input:**") && p.contains("`\"bca\"`"), "{p}");
+        // <sup> becomes ^ so 10^5 isn't flattened to 105
+        assert!(p.contains("10^5"), "superscript lost: {p}");
     }
 
     #[test]
