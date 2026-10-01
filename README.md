@@ -52,13 +52,32 @@ swift, kotlin, dart, golang, ruby, scala, rust, racket, erlang, elixir.
 Binary resolution order: `lsp.leetcode.binary.path` → `leetcode-zed` on `$PATH`
 → GitHub release download.
 
-## Publishing
+## Releasing a new version
 
-- **Binaries:** push a tag (`git tag v0.1.0 && git push origin v0.1.0`); the
-  `release` workflow cross-compiles and attaches the per-platform assets that
-  `src/lib.rs` downloads.
-- **Registry:** fork `zed-industries/extensions`, add this repo as a submodule
-  and an entry in its `extensions.toml`, then open a PR.
+The binary and the extension version a tagged commit. Steps:
+
+1. Bump `version` in `extension.toml` (this is what the registry pins).
+2. Commit and push to `main`.
+3. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`. The `release`
+   workflow (`.github/workflows/release.yml`) cross-compiles `leetcode-zed` for
+   macOS (arm64/x64), Linux x64, and Windows x64 and attaches gzipped assets
+   named exactly as `src/lib.rs` expects (`leetcode-zed-<arch>-<os>[.exe].gz`).
+   At runtime the extension downloads these when the binary isn't on `$PATH`.
+4. First release only — submit to the registry: fork
+   `zed-industries/extensions` (personal account), then
+   ```sh
+   git submodule add https://github.com/azhou555/zed-leetcode.git extensions/leetcode
+   (cd extensions/leetcode && git checkout vX.Y.Z)   # pin to the tag
+   # add a [leetcode] entry to extensions.toml with version = "X.Y.Z"
+   pnpm install && node src/sort-extensions.js         # sorts extensions.toml + .gitmodules
+   ```
+   Commit and open a PR (one extension per PR; HTTPS submodule URL; pinned
+   commit must be on a branch).
+5. Later updates — in a fresh PR: `cd extensions/leetcode && git checkout vX.Y.Z`,
+   bump `version` in `extensions.toml` to match, re-sort, push.
+
+Binary resolution at runtime: `lsp.leetcode.binary.path` → `leetcode-zed` on
+`$PATH` → GitHub release download (cached in Zed's `extensions/work/leetcode/`).
 
 ## Use
 
@@ -97,5 +116,4 @@ cargo build --target wasm32-wasip2      # the extension itself
 ```
 Logs: `zed: open log`, look for `leetcode`.
 
-Not done (yet): leetcode.cn, topic-tag filters, auto-downloading the binary
-(needs published releases).
+Not done (yet): leetcode.cn, topic-tag filters.
