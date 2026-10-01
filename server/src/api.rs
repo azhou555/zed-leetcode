@@ -317,14 +317,18 @@ pub fn format_result(r: &Value, submit: bool, input: Option<&str>) -> (bool, Str
             }
         }
     } else {
-        let (got, want, out) = (list("code_answer"), list("expected_code_answer"), list("std_output_list"));
-        let same = got.iter().zip(&want).all(|(g, w)| g.is_empty() || g == w) && !got.is_empty();
+        let (mut got, want, out) = (list("code_answer"), list("expected_code_answer"), list("std_output_list"));
+        // LeetCode pads code_answer with a trailing empty entry; drop it so the case count is right
+        while got.last().is_some_and(String::is_empty) {
+            got.pop();
+        }
+        let same = !got.is_empty() && got.iter().zip(&want).all(|(g, w)| g == w);
         let correct = r["correct_answer"].as_bool().unwrap_or(same);
         ok = r["run_success"].as_bool().unwrap_or(false) && correct;
         // split the testcase text into one group of args per case, when it divides evenly
         let cases: Vec<String> = input.map(|i| i.lines().map(str::to_string).collect()).unwrap_or_default();
         let per_case = if !cases.is_empty() && !got.is_empty() && cases.len().is_multiple_of(got.len()) { cases.len() / got.len() } else { 0 };
-        for (i, g) in got.iter().enumerate().filter(|(_, g)| !g.is_empty()) {
+        for (i, g) in got.iter().enumerate() {
             let w = want.get(i).map(String::as_str).unwrap_or("");
             d.push(format!("Case {}: {}", i + 1, if g == w { "✓" } else { "✗" }));
             if per_case > 0 {
