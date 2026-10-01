@@ -279,7 +279,8 @@ impl Client {
 }
 
 /// (passed, one-line summary, multi-line details) from a judge `check` response.
-pub fn format_result(r: &Value, submit: bool) -> (bool, String, String) {
+/// `input` is the testcase text that was run (Test only), shown per case when it divides evenly.
+pub fn format_result(r: &Value, submit: bool, input: Option<&str>) -> (bool, String, String) {
     let s = |k: &str| match &r[k] {
         Value::String(s) => s.clone(),
         Value::Null => String::new(),
@@ -320,11 +321,19 @@ pub fn format_result(r: &Value, submit: bool) -> (bool, String, String) {
         let same = got.iter().zip(&want).all(|(g, w)| g.is_empty() || g == w) && !got.is_empty();
         let correct = r["correct_answer"].as_bool().unwrap_or(same);
         ok = r["run_success"].as_bool().unwrap_or(false) && correct;
+        // split the testcase text into one group of args per case, when it divides evenly
+        let cases: Vec<String> = input.map(|i| i.lines().map(str::to_string).collect()).unwrap_or_default();
+        let per_case = if !cases.is_empty() && !got.is_empty() && cases.len().is_multiple_of(got.len()) { cases.len() / got.len() } else { 0 };
         for (i, g) in got.iter().enumerate().filter(|(_, g)| !g.is_empty()) {
             let w = want.get(i).map(String::as_str).unwrap_or("");
-            d.push(format!("Case {}: {} output {g}, expected {w}", i + 1, if g == w { "✓" } else { "✗" }));
+            d.push(format!("Case {}: {}", i + 1, if g == w { "✓" } else { "✗" }));
+            if per_case > 0 {
+                d.push(format!("  input:    {}", cases[i * per_case..(i + 1) * per_case].join(", ")));
+            }
+            d.push(format!("  output:   {g}"));
+            d.push(format!("  expected: {w}"));
             if let Some(o) = out.get(i).filter(|o| !o.is_empty()) {
-                d.push(format!("  stdout: {}", o.trim_end().replace('\n', " | ")));
+                d.push(format!("  stdout:   {}", o.trim_end().replace('\n', " | ")));
             }
         }
         if !s("status_runtime").is_empty() {
@@ -358,35 +367,40 @@ mod tests {
 
     #[test]
     fn results() {
+        // Test with input: each case shows its input args (2 lines per case -> 2 cases)
         let run = json!({"state":"SUCCESS","status_msg":"Accepted","run_success":true,"correct_answer":false,
             "code_answer":["[0,1]","[2,1]"],"expected_code_answer":["[0,1]","[1,2]"],"std_output_list":["",""]});
-        let (ok, sum, d) = format_result(&run, false);
+        let (ok, sum, d) = format_result(&run, false, Some("[2,7,11,15]\n9\n[3,2,4]\n6"));
         assert!(!ok);
         assert_eq!(sum, "❌ Wrong Answer");
-        assert!(d.contains("Case 2: ✗ output [2,1], expected [1,2]"), "{d}");
+        assert!(d.contains("Case 2: ✗") && d.contains("input:    [3,2,4], 6") && d.contains("output:   [2,1]") && d.contains("expected: [1,2]"), "{d}");
+
+        // no input available -> no input line, but output/expected still shown
+        let (_, _, d2) = format_result(&run, false, None);
+        assert!(!d2.contains("input:") && d2.contains("output:   [2,1]"), "{d2}");
 
         let sub = json!({"status_msg":"Accepted","status_runtime":"3 ms","runtime_percentile":91.5,
             "status_memory":"17 MB","memory_percentile":40.0,"total_correct":63,"total_testcases":63});
-        let (ok, sum, d) = format_result(&sub, true);
+        let (ok, sum, d) = format_result(&sub, true, None);
         assert!(ok && sum == "✅ Accepted" && d.contains("beats 91.5%") && d.contains("63/63"), "{d}");
 
         let no_flag = json!({"status_msg":"Accepted","run_success":true,"code_answer":["[0,1]"],"expected_code_answer":["[0,1]"]});
-        assert_eq!(format_result(&no_flag, false).1, "✅ All test cases passed");
+        assert_eq!(format_result(&no_flag, false, None).1, "✅ All test cases passed");
 
         let ce = json!({"status_msg":"Compile Error","full_compile_error":"line 3: oops"});
-        let (ok, sum, d) = format_result(&ce, false);
+        let (ok, sum, d) = format_result(&ce, false, None);
         assert!(!ok && sum == "❌ Compile Error" && d.contains("oops"));
 
         // a real WA (from LeetCode) stays clean: parsed cases, no raw dump
         let real = json!({"code_answer":["[0,1]","[1,1]","[0,1]",""],"correct_answer":false,
             "expected_code_answer":["[0,1]","[1,2]","[0,1]",""],"run_success":true,
             "status_msg":"Accepted","status_runtime":"0 ms","std_output_list":["","","",""]});
-        let (ok, _, d) = format_result(&real, false);
+        let (ok, _, d) = format_result(&real, false, None);
         assert!(!ok && d.contains("Case 2: ✗") && !d.contains("Raw:"), "{d}");
 
         // genuinely unexpected shape: nothing parsed, so keep the raw fallback
         let weird = json!({"state":"SUCCESS","error":"judge exploded"});
-        let (_, sum, d) = format_result(&weird, false);
+        let (_, sum, d) = format_result(&weird, false, None);
         assert!(sum == "❌ Unexpected result" && d.contains("Raw:"), "{d}");
     }
 }

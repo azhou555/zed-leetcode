@@ -92,7 +92,7 @@ pub fn judge(text: &str, file_name: &str, submit: bool) -> Result<(bool, String,
         (None, _) => Some(c.question(&s.slug)?.examples),
     };
     let r = c.judge(&s.slug, &s.lang, &s.code, tests.as_deref())?;
-    Ok(api::format_result(&r, submit))
+    Ok(api::format_result(&r, submit, tests.as_deref()))
 }
 
 const TASKS: &str = r#"[
